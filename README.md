@@ -6,7 +6,7 @@
 
 ## Features
 
-* Deterministic compression using `xoshiro256++`
+* Deterministic compression using `xoshiro1024++`
 * CPU and OpenCL (GPU) accelerated compression
 * Multi-threaded CPU seed search
 * Bit-accurate encoding (for truly minimal encodings)

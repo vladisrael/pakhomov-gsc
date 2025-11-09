@@ -5,9 +5,8 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
-#include <sstream>
 #include <iterator>
-#include "xoshiro256.hpp"
+#include "xoshiro1024pp.hpp"
 #define CL_HPP_TARGET_OPENCL_VERSION 200
 #include <CL/opencl.hpp>
 
@@ -57,7 +56,7 @@ vector<uint64_t> file_to_bits_u64(const vector<unsigned char>& data, size_t& out
 
 // Generate PRNG bits into uint64_t vector
 vector<uint64_t> generate_bits_u64(uint64_t seed, size_t bit_count) {
-    xoshiro256pp rng(seed);
+    xoshiro1024pp rng(seed);
     size_t word_count = (bit_count + 63) / 64;
     vector<uint64_t> bits(word_count);
 
