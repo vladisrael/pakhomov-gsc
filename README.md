@@ -20,7 +20,7 @@
 Requires C++20, and OpenCL headers.
 
 ```bash
-git clone https://github.com/vladimir-sama/pakhomov-gsc.git
+git clone https://github.com/vladisrael/pakhomov-gsc.git
 cd pakhomov-gsc
 sh compile.sh
 ```
