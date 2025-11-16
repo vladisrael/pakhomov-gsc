@@ -101,6 +101,9 @@ void search_seed(const vector<uint64_t>& target_bits, size_t bit_count, uint64_t
             break;
         }
         seed += step;
+        if (seed % 1'000'000 == 0) {
+            std::cout << "Seed progress: " << seed << std::endl;
+        }
     }
 }
 
@@ -148,7 +151,7 @@ void compress_cl(const std::string& input_file, const std::string& output_file, 
     std::vector<uint64_t> target_bits = file_to_bits_u64(data, bit_count);
 
     std::cout << "Target: " << bit_count << " bits. Using OpenCL GPU acceleration." << std::endl;
-    std::cout << "Using chunk size: " << chunk_size << " threads per batch.\n";
+    std::cout << "Using chunk size: " << chunk_size << " threads per batch.\n" << std::endl;
 
     try {
         // 1. Get OpenCL platforms and devices
@@ -220,9 +223,10 @@ void compress_cl(const std::string& input_file, const std::string& output_file, 
 
             // 7. Move to next chunk
             start_seed += chunk_size;
+            std::cout << "Seed progress: " << start_seed << std::endl;
 
             // Optional: reduce CPU usage a bit
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            //std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
 
     } catch (const std::exception& e) {
