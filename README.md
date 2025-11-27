@@ -1,6 +1,6 @@
 # Pakhomov GSC
 
-**Pakhomov GSC** (Generative Seed Compression) is a lossless compression tool based on deterministic pseudorandom generation. It encodes a file as a seed that reproduces the same output via a seeded PRNG. This makes decompression extremely lightweight and fast — all you need is the seed and the PRNG logic.
+**Pakhomov GSC** (Generative Seed Compression) is a lossless compression tool based on deterministic pseudorandom generation. It encodes a file as a seed that reproduces the same output via a seeded PRNG. This makes decompression extremely lightweight and fast — all you need is the seed and the PRNG logic. **PGSZ** is the file extension and always weights 16 bytes!
 
 ---
 
@@ -34,19 +34,20 @@ sh compile.sh
 #### CPU Version:
 
 ```bash
-./pakhomov-gsc compress <input_file> [compressed_file]
+./pakhomov-gsc compress <input_file>
 ```
 
+* `input_file` goes in output file with `.pgsz` extension.
 * Compresses the file using multi-threaded CPU search.
 
 #### OpenCL Version (GPU):
 
 ```bash
-./pakhomov-gsc compress-cl <input_file> [compressed_file] [chunk_size]
+./pakhomov-gsc compress-cl <input_file> [chunk_size]
 ```
 
 * Uses OpenCL to search for a matching seed in parallel.
-* `compressed_file` defaults to `<input_file>.bin` if not specified.
+* `input_file` goes in output file with `.pgsz` extension.
 * `chunk_size` defines the number of threads per batch (default: `1 000 000 000`).
 
 ---
@@ -54,10 +55,11 @@ sh compile.sh
 ### Decompression
 
 ```bash
-./pakhomov-gsc decompress <compressed_file> [output_file]
+./pakhomov-gsc decompress <compressed_file>
 ```
 
 * Reconstructs the original file from the seed and bit count.
+* `compressed_file` goes in output file removing the `.pgsz` extension.
 
 ---
 
@@ -68,6 +70,8 @@ All compressed files are binary files containing:
 ```
 <seed> <bit_length>
 ```
+
+Should always be 16 bytes. So it kinda nukes all compression. (If actually convenient)
 
 ---
 

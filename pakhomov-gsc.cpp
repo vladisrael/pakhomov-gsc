@@ -254,25 +254,29 @@ int main(int argc, char* argv[]) {
     if (argc < 3) {
         cout << "Pakhomov GSC (Generative Seed Compression) (2025)\n";
         cout << "Usage:\n";
-        cout << "  " << argv[0] << " compress <input_file> [compressed_file]\n";
-        cout << "  " << argv[0] << " compress-cl <input_file> [compressed_file] [chunk_size]\n";
-        cout << "  " << argv[0] << " decompress <compressed_file> [output_file]\n";
+        cout << "  " << argv[0] << " compress <input_file>\n";
+        cout << "  " << argv[0] << " compress-cl <input_file> [chunk_size]\n";
+        cout << "  " << argv[0] << " decompress <compressed_file>\n";
         return 1;
     }
 
     string command = argv[1];
     if (command == "compress") {
         string input = argv[2];
-        string output = (argc > 3) ? argv[3] : (argv[2] + string(".bin"));
+        string output = argv[2] + string(".pgsz");
         compress(input, output);
     } else if (command == "compress-cl") {
         string input = argv[2];
-        string output = (argc > 3) ? argv[3] : (argv[2] + string(".bin"));
-        size_t chunk_size = (argc > 4) ? std::stoull(argv[4]) : 1'000'000'000;
+        string output = argv[2] + string(".pgsz");
+        size_t chunk_size = (argc > 3) ? std::stoull(argv[3]) : 1'000'000'000;
         compress_cl(input, output, chunk_size);
     } else if (command == "decompress") {
         string input = argv[2];
-        string output = (argc > 3) ? argv[3] : "output.bin";
+        string output = argv[2];
+
+        if (output.size() > 5 && output.rfind(".pgsz") == output.size() - 5) {
+            output = output.substr(0, output.size() - 5);
+        }
         decompress(input, output);
     } else {
         cout << "Unknown command: " << command << endl;
