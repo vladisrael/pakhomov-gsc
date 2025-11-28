@@ -12,27 +12,22 @@
 
 using namespace std;
 
-// --- Config ---
-const int THREAD_COUNT = thread::hardware_concurrency(); // use all cores
-// ---------------
+const int THREAD_COUNT = thread::hardware_concurrency();
 
 mutex output_mutex;
 atomic<bool> found(false);
 uint64_t found_seed = 0;
 
-// Read entire binary file
 vector<unsigned char> read_file(const string& filename) {
     ifstream file(filename, ios::binary);
     return vector<unsigned char>((istreambuf_iterator<char>(file)), istreambuf_iterator<char>());
 }
 
-// Write binary file
 void write_file(const string& filename, const vector<unsigned char>& data) {
     ofstream file(filename, ios::binary);
     file.write(reinterpret_cast<const char*>(data.data()), data.size());
 }
 
-// Convert bytes -> packed uint64_t bit vector
 vector<uint64_t> file_to_bits_u64(const vector<unsigned char>& data, size_t& out_bit_count) {
     size_t bit_count = data.size() * 8;
     vector<uint64_t> bits((bit_count + 63) / 64, 0);
@@ -43,7 +38,6 @@ vector<uint64_t> file_to_bits_u64(const vector<unsigned char>& data, size_t& out
         }
     }
 
-    // Mask out garbage bits in last word
     if (bit_count % 64 != 0) {
         int valid_bits = bit_count % 64;
         uint64_t mask = ((uint64_t)1 << valid_bits) - 1;
@@ -54,17 +48,15 @@ vector<uint64_t> file_to_bits_u64(const vector<unsigned char>& data, size_t& out
     return bits;
 }
 
-// Generate PRNG bits into uint64_t vector
 vector<uint64_t> generate_bits_u64(uint64_t seed, size_t bit_count) {
     xoshiro1024pp rng(seed);
     size_t word_count = (bit_count + 63) / 64;
     vector<uint64_t> bits(word_count);
 
     for (size_t i = 0; i < word_count; ++i) {
-        bits[i] = rng.next(); // One 64-bit word per call
+        bits[i] = rng.next();
     }
 
-    // Mask unused bits in the last word (optional but safer)
     if (bit_count % 64 != 0) {
         int valid_bits = bit_count % 64;
         uint64_t mask = ((uint64_t)1 << valid_bits) - 1;
@@ -75,7 +67,6 @@ vector<uint64_t> generate_bits_u64(uint64_t seed, size_t bit_count) {
     return bits;
 }
 
-// Convert uint64_t bit vector -> bytes
 vector<unsigned char> bits_to_bytes_u64(const vector<uint64_t>& bits, size_t bit_count) {
     vector<unsigned char> bytes((bit_count + 7) / 8, 0);
 
@@ -87,7 +78,6 @@ vector<unsigned char> bits_to_bytes_u64(const vector<uint64_t>& bits, size_t bit
     return bytes;
 }
 
-// Worker thread function
 void search_seed(const vector<uint64_t>& target_bits, size_t bit_count, uint64_t start_seed, uint64_t step) {
     uint64_t seed = start_seed;
     while (!found) {
@@ -102,26 +92,29 @@ void search_seed(const vector<uint64_t>& target_bits, size_t bit_count, uint64_t
         }
         seed += step;
         if (seed % 1'000'000 == 0) {
-            std::cout << "Seed progress: " << seed << std::endl;
+            cout << "PROGRESS (" << seed << ")" << endl;
         }
     }
 }
 
-// Helper to read kernel source from file
-std::string read_kernel(const std::string& filename) {
-    std::ifstream file(filename);
-    if (!file.is_open()) throw std::runtime_error("Failed to open kernel file.");
-    return std::string((std::istreambuf_iterator<char>(file)),
-                       std::istreambuf_iterator<char>());
+string read_kernel(const string& filename) {
+    ifstream file(filename);
+    if (!file.is_open()) throw runtime_error("ERROR (Failed to open kernel file)");
+    return string((istreambuf_iterator<char>(file)),
+                       istreambuf_iterator<char>());
 }
 
-// Compress: find seed
 void compress(const string& input_file, const string& output_file) {
     vector<unsigned char> data = read_file(input_file);
     size_t bit_count;
     vector<uint64_t> target_bits = file_to_bits_u64(data, bit_count);
 
-    cout << "Target: " << bit_count << " bits. Using " << THREAD_COUNT << " threads." << endl;
+
+    size_t word_count = (bit_count + 63) / 64;
+
+    cout << "TARGET > (" << bit_count << " bits)" << endl;
+    cout << "WORDS > (" << word_count << ")" << endl;
+    cout << "THREADS > (" << THREAD_COUNT << ") (CPU)" << endl;
 
     vector<thread> threads;
     for (int i = 0; i < THREAD_COUNT; ++i) {
@@ -133,48 +126,50 @@ void compress(const string& input_file, const string& output_file) {
     }
 
     if (found) {
-        std::ofstream out(output_file, std::ios::binary);
+        ofstream out(output_file, ios::binary);
         out.write(reinterpret_cast<const char*>(&found_seed), sizeof(found_seed));
         out.write(reinterpret_cast<const char*>(&bit_count), sizeof(bit_count));
         out.close();
-        cout << "Seed found: " << found_seed << endl;
-        cout << "Saved to: " << output_file << endl;
+
+        cout << "DONE (" << found_seed << ") (" << bit_count << " bits) > (" << output_file << ")" << endl;
     } else {
-        cout << "No seed found (unexpected)." << endl;
+        cout << "ERROR" << endl;
     }
 }
 
-// Compress: find seed with OpenCL
-void compress_cl(const std::string& input_file, const std::string& output_file, size_t chunk_size = 1'000'000'000) {
-    std::vector<unsigned char> data = read_file(input_file);
+void compress_cl(const string& input_file, const string& output_file, size_t chunk_size = 1'000'000'000) {
+    vector<unsigned char> data = read_file(input_file);
     size_t bit_count;
-    std::vector<uint64_t> target_bits = file_to_bits_u64(data, bit_count);
+    vector<uint64_t> target_bits = file_to_bits_u64(data, bit_count);
 
-    std::cout << "Target: " << bit_count << " bits. Using OpenCL GPU acceleration." << std::endl;
-    std::cout << "Using chunk size: " << chunk_size << " threads per batch.\n" << std::endl;
+    size_t word_count = (bit_count + 63) / 64;
+
+    cout << "TARGET > (" << bit_count << " bits)" << endl;
+    cout << "WORDS > (" << word_count << ")" << endl;
+    cout << "CHUNK SIZE > (" << chunk_size << ") (OpenCL)" << endl;
+
 
     try {
-        // 1. Get OpenCL platforms and devices
-        std::vector<cl::Platform> platforms;
+        vector<cl::Platform> platforms;
         cl::Platform::get(&platforms);
-        if (platforms.empty()) throw std::runtime_error("No OpenCL platforms found");
+        if (platforms.empty()) throw runtime_error("ERROR (No OpenCL platforms found)");
 
         cl::Platform platform = platforms[0];
-        std::vector<cl::Device> devices;
+        vector<cl::Device> devices;
         platform.getDevices(CL_DEVICE_TYPE_GPU, &devices);
-        if (devices.empty()) throw std::runtime_error("No OpenCL GPU devices found");
+        if (devices.empty()) throw runtime_error("ERROR (No OpenCL device found)");
 
         cl::Device device = devices[0];
         cl::Context context(device);
         cl::CommandQueue queue(context, device);
 
         // 2. Read and build kernel
-        std::string kernel_source = read_kernel("pakhomov-gsc.cl");
+        string kernel_source = read_kernel("pakhomov-gsc.cl");
         cl::Program program(context, kernel_source);
         try {
             program.build("-cl-std=CL2.0");
         } catch (...) {
-            std::cerr << "Kernel build error:\n" << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << std::endl;
+            cerr << "ERROR (Kernel build)\n" << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << endl;
             throw;
         }
 
@@ -190,12 +185,11 @@ void compress_cl(const std::string& input_file, const std::string& output_file, 
         int found_flag = 0;
 
         while (true) {
-            // 4. Set kernel arguments for this chunk
-            kernel.setArg(0, buffer_out_seed);        // result
-            kernel.setArg(1, buffer_target_bits);     // target
-            kernel.setArg(2, (cl_ulong)bit_count);    // bit_count
-            kernel.setArg(3, (cl_ulong)start_seed);   // start_seed offset
-            kernel.setArg(4, buffer_found_flag);      // found_flag
+            kernel.setArg(0, buffer_out_seed);
+            kernel.setArg(1, buffer_target_bits);
+            kernel.setArg(2, (cl_ulong)bit_count);
+            kernel.setArg(3, (cl_ulong)start_seed);
+            kernel.setArg(4, buffer_found_flag);
 
             // Reset flag
             found_flag = 0;
@@ -211,32 +205,27 @@ void compress_cl(const std::string& input_file, const std::string& output_file, 
                 uint64_t found_seed;
                 queue.enqueueReadBuffer(buffer_out_seed, CL_TRUE, 0, sizeof(uint64_t), &found_seed);
 
-                std::ofstream out(output_file, std::ios::binary);
+                ofstream out(output_file, ios::binary);
                 out.write(reinterpret_cast<const char*>(&found_seed), sizeof(found_seed));
                 out.write(reinterpret_cast<const char*>(&bit_count), sizeof(bit_count));
                 out.close();
 
-                std::cout << "Seed found: " << found_seed << std::endl;
-                std::cout << "Saved to: " << output_file << std::endl;
+                cout << "DONE (" << found_seed << ") (" << bit_count << " bits) > (" << output_file << ")" << endl;
                 break;
             }
 
-            // 7. Move to next chunk
             start_seed += chunk_size;
-            std::cout << "Seed progress: " << start_seed << std::endl;
+            cout << "PROGRESS (" << start_seed << ")" << endl;
 
-            // Optional: reduce CPU usage a bit
-            //std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
 
-    } catch (const std::exception& e) {
-        std::cerr << "OpenCL error: " << e.what() << std::endl;
+    } catch (const exception& e) {
+        cerr << "ERROR (OpenCL) > " << e.what() << endl;
     }
 }
 
-// Decompress: regen file
 void decompress(const string& input_file, const string& output_file) {
-    std::ifstream in(input_file, std::ios::binary);
+    ifstream in(input_file, ios::binary);
     uint64_t seed;
     size_t bit_count;
     in.read(reinterpret_cast<char*>(&seed), sizeof(seed));
@@ -246,14 +235,14 @@ void decompress(const string& input_file, const string& output_file) {
     vector<unsigned char> bytes = bits_to_bytes_u64(bits, bit_count);
     write_file(output_file, bytes);
 
-    cout << "Decompressed file with seed " << seed << " (" << bit_count << " bits)." << endl;
+    cout << "DONE (" << seed << ") (" << bit_count << " bits) > (" << output_file << ")" << endl;
 }
 
 // Main
 int main(int argc, char* argv[]) {
     if (argc < 3) {
         cout << "Pakhomov GSC (Generative Seed Compression) (2025)\n";
-        cout << "Usage:\n";
+        cout << "USAGE\n";
         cout << "  " << argv[0] << " compress <input_file>\n";
         cout << "  " << argv[0] << " compress-cl <input_file> [chunk_size]\n";
         cout << "  " << argv[0] << " decompress <compressed_file>\n";
@@ -268,7 +257,7 @@ int main(int argc, char* argv[]) {
     } else if (command == "compress-cl") {
         string input = argv[2];
         string output = argv[2] + string(".pgsz");
-        size_t chunk_size = (argc > 3) ? std::stoull(argv[3]) : 1'000'000'000;
+        size_t chunk_size = (argc > 3) ? stoull(argv[3]) : 1'000'000'000;
         compress_cl(input, output, chunk_size);
     } else if (command == "decompress") {
         string input = argv[2];
@@ -279,7 +268,7 @@ int main(int argc, char* argv[]) {
         }
         decompress(input, output);
     } else {
-        cout << "Unknown command: " << command << endl;
+        cout << "ERROR (Command not found) > " << command << endl;
         return 1;
     }
 
